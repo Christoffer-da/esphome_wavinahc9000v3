@@ -29,6 +29,22 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_PARENT_ID])
     var = cg.new_Pvariable(config[CONF_ID])
     await climate.register_climate(var, config)
+
+    # Comfort climates expose the controller's floor minimum/maximum as a
+    # two-point target. Do not use the *current* floor limits as the visual
+    # limits in Home Assistant, otherwise a controller currently configured
+    # for 22..27 C becomes impossible to adjust outside that range.
+    #
+    # The current C++ write path clamps floor-limit writes to 5..35 C. Use a
+    # conservative 6..35 C UI range here so lower comfort limits can be
+    # selected while keeping the UI within the component's supported write
+    # range. ESPHome applies these overrides after WavinZoneClimate::traits().
+    if config[CONF_USE_FLOOR_TEMPERATURE]:
+        cg.add_define("USE_CLIMATE_VISUAL_OVERRIDES")
+        cg.add(var.set_visual_min_temperature_override(6.0))
+        cg.add(var.set_visual_max_temperature_override(35.0))
+        cg.add(var.set_visual_temperature_step_override(0.5, 0.5))
+
     # Bind to hub
     cg.add(var.set_parent(hub))
     if CONF_CHANNEL in config:
